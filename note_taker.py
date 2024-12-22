@@ -46,6 +46,11 @@ class WebpageNoteTaker(QMainWindow):
         self.note_area.setPlaceholderText("Type your notes here...")
         self.layout.addWidget(self.note_area)
 
+        # Category Input
+        self.category_input = QTextEdit()
+        self.category_input.setPlaceholderText("Enter category here...")
+        self.layout.addWidget(self.category_input)
+
         # Save Note Button
         save_button = QPushButton("Save Note")
         save_button.clicked.connect(self.save_note)
@@ -79,6 +84,7 @@ class WebpageNoteTaker(QMainWindow):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT NOT NULL,
             note TEXT NOT NULL,
+            category TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         """)
@@ -90,12 +96,17 @@ class WebpageNoteTaker(QMainWindow):
         """
         def capture_selection(js_result):
             note_text = js_result.strip() or self.note_area.toPlainText()
+            category = self.category_input.toPlainText().strip()  # Get category input
             if note_text:  # Ensure there's something to save
                 current_url = self.browser.url().toString()  # Get the current webpage URL
-                # Insert the note into the database
-                self.cursor.execute("INSERT INTO notes (url, note) VALUES (?, ?)", (current_url, note_text))
+                # Insert the note with category into the database
+                self.cursor.execute(
+                    "INSERT INTO notes (url, note, category) VALUES (?, ?, ?)",
+                    (current_url, note_text, category)
+                )
                 self.conn.commit()  # Save the changes
                 self.note_area.clear()  # Clear the note area
+                self.category_input.clear()  # Clear the category input
                 print("Note saved to database!")
             else:
                 print("No text selected or entered.")
@@ -107,12 +118,13 @@ class WebpageNoteTaker(QMainWindow):
         """
         Display all saved notes from the database in a new window.
         """
-        self.cursor.execute("SELECT url, note, timestamp FROM notes ORDER BY timestamp DESC")
+        self.cursor.execute("SELECT url, note, category, timestamp FROM notes ORDER BY timestamp DESC")
         notes = self.cursor.fetchall()  # Fetch all notes from the database
 
         if notes:
             notes_text = "\n".join(
-                f"URL: {url}\nNote: {note}\nTimestamp: {timestamp}\n{'-' * 40}" for url, note, timestamp in notes
+                f"URL: {url}\nNote: {note}\nCategory: {category}\nTimestamp: {timestamp}\n{'-' * 40}"
+                for url, note, category, timestamp in notes
             )
         else:
             notes_text = "No notes saved yet."
@@ -137,12 +149,13 @@ class WebpageNoteTaker(QMainWindow):
             self, "Export Notes", "", "JSON Files (*.json)", options=options
         )
         if file_name:
-            self.cursor.execute("SELECT url, note, timestamp FROM notes")
+            self.cursor.execute("SELECT url, note, category, timestamp FROM notes")
             notes = self.cursor.fetchall()  # Fetch all notes
 
             # Convert notes to a list of dictionaries
             notes_data = [
-                {"url": url, "note": note, "timestamp": timestamp} for url, note, timestamp in notes
+                {"url": url, "note": note, "category": category, "timestamp": timestamp}
+                for url, note, category, timestamp in notes
             ]
 
             # Save the notes as a JSON file
